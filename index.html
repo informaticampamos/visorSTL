@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visor STL 3D - CAD &amp; Impresión 3D</title>
+
+  <!-- Fuente Inter y JetBrains Mono para métricas técnicas -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Importmap oficial para Three.js v0.170.0 desde jsDelivr CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="w-screen h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased select-none relative">
+  <!-- Contenedor del lienzo 3D a pantalla completa -->
+  <main id="viewport-container" class="w-full h-full relative">
+    <canvas id="stl-canvas" class="block w-full h-full outline-none cursor-grab active:cursor-grabbing"></canvas>
+  </main>
+
+  <!-- Barra superior izquierda: Identidad y carga de archivos -->
+  <header class="fixed top-3 left-3 sm:top-4 sm:left-4 z-20 flex flex-wrap items-center gap-2 sm:gap-3 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-3.5 py-2.5 shadow-2xl max-w-[calc(100vw-1.5rem)]">
+    <div class="flex items-center gap-2.5 pr-1">
+      <!-- Icono técnico 3D -->
+      <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-400 shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.29 7 12 12 20.71 7" />
+          <line x1="12" y1="22" x2="12" y2="12" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-sm sm:text-base font-semibold tracking-tight text-slate-100 leading-tight">
+          Visor STL 3D
+        </h1>
+        <p class="text-[11px] text-slate-400 hidden sm:block">
+          Inspección CAD e Impresión 3D
+        </p>
+      </div>
+    </div>
+
+    <div class="h-6 w-px bg-slate-700/70 hidden sm:block"></div>
+
+    <!-- Selector oculto de archivos .stl -->
+    <input id="file-input" type="file" accept=".stl" class="hidden" />
+
+    <!-- Botón principal para abrir archivo -->
+    <button
+      id="btn-open-file"
+      type="button"
+      class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-semibold text-xs sm:text-sm transition-all shadow-lg shadow-sky-500/20 cursor-pointer"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+      <span>Cargar .STL</span>
+    </button>
+
+    <!-- Botón rápido para restaurar pieza de demostración -->
+    <button
+      id="btn-load-demo"
+      type="button"
+      title="Cargar pieza de calibración de ejemplo"
+      class="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/70 text-slate-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 17 12 22 22 17" />
+        <polyline points="2 12 12 17 22 12" />
+      </svg>
+      <span class="hidden md:inline">Demo</span>
+    </button>
+  </header>
+
+  <!-- Panel flotante superior derecho: Controles de visualización -->
+  <aside class="fixed top-16 sm:top-4 right-3 sm:right-4 z-20 w-64 sm:w-72 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden">
+    <!-- Cabecera del panel con botón de plegado para pantallas pequeñas -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/80">
+      <div class="flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="21" x2="4" y2="14" />
+          <line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" />
+          <line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" />
+          <line x1="9" y1="8" x2="15" y2="8" />
+          <line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">
+          Controles
+        </h2>
+      </div>
+      <button
+        id="btn-toggle-controls"
+        type="button"
+        aria-label="Mostrar u ocultar controles"
+        class="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+      >
+        <svg id="icon-chevron" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Cuerpo del panel de controles -->
+    <div id="controls-body" class="p-4 space-y-4">
+      <!-- Selector de color del material -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <label for="material-color" class="text-xs font-medium text-slate-300">
+            Color del material
+          </label>
+          <span id="color-hex-label" class="text-[11px] font-mono text-slate-400 uppercase">
+            #38BDF8
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Selector nativo estilizado -->
+          <label class="relative w-9 h-8 rounded-xl overflow-hidden border border-slate-600/80 cursor-pointer shrink-0 shadow-inner">
+            <input
+              id="material-color"
+              type="color"
+              value="#38bdf8"
+              class="absolute -inset-2 w-14 h-14 cursor-pointer bg-transparent border-0"
+            />
+          </label>
+
+          <!-- Muestras rápidas de filamento/material CAD -->
+          <div class="flex items-center gap-1.5 flex-1 justify-end">
+            <button type="button" data-color="#38bdf8" title="Cian técnico" class="color-preset w-6 h-6 rounded-lg bg-[#38bdf8] border-2 border-white ring-1 ring-slate-600 transition-transform hover:scale-110 cursor-pointer"></button>
+            <button type="button" data-color="#fb923c" title="Naranja prototipo" class="color-preset w-6 h-6 rounded-lg bg-[#fb923c] border border-slate-700 transition-transform hover:scale-110 cursor-pointer"></button>
+            <button type="button" data-color="#94a3b8" title="Gris aluminio CAD" class="color-preset w-6 h-6 rounded-lg bg-[#94a3b8] border border-slate-700 transition-transform hover:scale-110 cursor-pointer"></button>
+            <button type="button" data-color="#34d399" title="Verde esmeralda" class="color-preset w-6 h-6 rounded-lg bg-[#34d399] border border-slate-700 transition-transform hover:scale-110 cursor-pointer"></button>
+            <button type="button" data-color="#f1f5f9" title="Blanco PLA" class="color-preset w-6 h-6 rounded-lg bg-[#f1f5f9] border border-slate-700 transition-transform hover:scale-110 cursor-pointer"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="h-px bg-slate-800/90"></div>
+
+      <!-- Casillas de opciones de visualización -->
+      <div class="space-y-2.5">
+        <!-- Modo alámbrico (Wireframe) -->
+        <label class="flex items-center justify-between gap-2 cursor-pointer group py-0.5">
+          <span class="text-xs font-medium text-slate-300 group-hover:text-white transition-colors">
+            Modo alámbrico (Wireframe)
+          </span>
+          <input
+            id="chk-wireframe"
+            type="checkbox"
+            class="w-4 h-4 rounded-md border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/40 focus:ring-offset-0 cursor-pointer accent-sky-500"
+          />
+        </label>
+
+        <!-- Rotación automática -->
+        <label class="flex items-center justify-between gap-2 cursor-pointer group py-0.5">
+          <span class="text-xs font-medium text-slate-300 group-hover:text-white transition-colors">
+            Rotación automática
+          </span>
+          <input
+            id="chk-autorotate"
+            type="checkbox"
+            class="w-4 h-4 rounded-md border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/40 focus:ring-offset-0 cursor-pointer accent-sky-500"
+          />
+        </label>
+
+        <!-- Mostrar/Ocultar cuadrícula base -->
+        <label class="flex items-center justify-between gap-2 cursor-pointer group py-0.5">
+          <span class="text-xs font-medium text-slate-300 group-hover:text-white transition-colors">
+            Mostrar cuadrícula base
+          </span>
+          <input
+            id="chk-grid"
+            type="checkbox"
+            checked
+            class="w-4 h-4 rounded-md border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/40 focus:ring-offset-0 cursor-pointer accent-sky-500"
+          />
+        </label>
+      </div>
+
+      <div class="h-px bg-slate-800/90"></div>
+
+      <!-- Botón para centrar/restablecer la vista de la cámara -->
+      <button
+        id="btn-reset-camera"
+        type="button"
+        class="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700/90 active:bg-slate-800 border border-slate-600/70 text-slate-100 text-xs font-semibold transition-all cursor-pointer"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M3 12h3m12 0h3M12 3v3m0 12v3" />
+        </svg>
+        <span>Centrar / Restablecer vista</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Panel flotante inferior izquierdo: Información técnica del modelo -->
+  <section
+    aria-label="Información del modelo"
+    class="fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-20 w-[calc(100vw-1.5rem)] sm:w-96 bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl p-3.5 sm:p-4 shadow-2xl"
+  >
+    <div class="flex items-center justify-between gap-2 mb-2.5">
+      <div class="flex items-center gap-2 min-w-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-300 shrink-0">
+          Información del modelo
+        </h2>
+      </div>
+      <span
+        id="model-badge"
+        class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/30 shrink-0"
+      >
+        Demostración
+      </span>
+    </div>
+
+    <!-- Nombre del archivo -->
+    <div class="mb-3 bg-slate-950/60 border border-slate-800/90 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+      <span class="text-[11px] text-slate-400 shrink-0">Archivo:</span>
+      <span
+        id="info-filename"
+        title="pieza_calibracion_demo.stl"
+        class="text-xs font-mono font-medium text-slate-100 truncate"
+      >
+        pieza_calibracion_demo.stl
+      </span>
+    </div>
+
+    <!-- Dimensiones (Ancho X × Alto Y × Profundidad Z) y Triángulos -->
+    <div class="grid grid-cols-4 gap-2">
+      <div class="bg-slate-950/60 border border-slate-800/90 rounded-xl p-2 text-center">
+        <div class="text-[10px] font-medium text-rose-400">Ancho X</div>
+        <div id="info-dim-x" class="text-xs font-mono font-semibold text-slate-100 mt-0.5">
+          0.00
+        </div>
+      </div>
+
+      <div class="bg-slate-950/60 border border-slate-800/90 rounded-xl p-2 text-center">
+        <div class="text-[10px] font-medium text-emerald-400">Alto Y</div>
+        <div id="info-dim-y" class="text-xs font-mono font-semibold text-slate-100 mt-0.5">
+          0.00
+        </div>
+      </div>
+
+      <div class="bg-slate-950/60 border border-slate-800/90 rounded-xl p-2 text-center">
+        <div class="text-[10px] font-medium text-sky-400">Prof. Z</div>
+        <div id="info-dim-z" class="text-xs font-mono font-semibold text-slate-100 mt-0.5">
+          0.00
+        </div>
+      </div>
+
+      <div class="bg-slate-950/60 border border-slate-800/90 rounded-xl p-2 text-center">
+        <div class="text-[10px] font-medium text-slate-400">Triángulos</div>
+        <div id="info-triangles" class="text-xs font-mono font-semibold text-amber-300 mt-0.5">
+          0
+        </div>
+      </div>
+    </div>
+
+    <!-- Línea resumen de dimensiones y aviso inicial -->
+    <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
+      <span>Dimensiones: <strong id="info-dim-summary" class="font-mono font-normal text-slate-300">0 × 0 × 0</strong></span>
+      <span class="hidden sm:inline text-slate-500">Arrastra un .STL aquí</span>
+    </div>
+  </section>
+
+  <!-- Ayuda discreta de navegación inferior derecha (solo escritorio) -->
+  <footer class="hidden lg:flex fixed bottom-4 right-4 z-10 items-center gap-3 bg-slate-900/65 backdrop-blur-md border border-slate-800/70 rounded-xl px-3.5 py-2 text-[11px] text-slate-400 pointer-events-none">
+    <span><strong class="text-slate-200 font-medium">Orbita:</strong> Clic izq.</span>
+    <span class="text-slate-700">•</span>
+    <span><strong class="text-slate-200 font-medium">Desplazar:</strong> Clic der.</span>
+    <span class="text-slate-700">•</span>
+    <span><strong class="text-slate-200 font-medium">Zoom:</strong> Rueda</span>
+  </footer>
+
+  <!-- Indicador visual a pantalla completa al arrastrar un archivo (Drag & Drop) -->
+  <div
+    id="drop-overlay"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/85 backdrop-blur-md p-6 pointer-events-none transition-opacity duration-150"
+  >
+    <div class="w-full max-w-lg border-2 border-dashed border-sky-400 bg-slate-900/90 rounded-3xl p-8 sm:p-12 text-center shadow-2xl shadow-sky-500/10">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-sky-500/15 border border-sky-400/40 flex items-center justify-center text-sky-400 animate-bounce">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      </div>
+      <h3 class="text-lg sm:text-xl font-bold text-white mb-1.5">
+        Suelta el archivo .STL aquí
+      </h3>
+      <p class="text-xs sm:text-sm text-slate-300">
+        Se centrará automáticamente sobre la cuadrícula y se ajustará la cámara a sus dimensiones.
+      </p>
+    </div>
+  </div>
+
+  <!-- Indicador de carga para archivos STL pesados -->
+  <div
+    id="loading-overlay"
+    class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm pointer-events-none"
+  >
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl px-6 py-4 flex items-center gap-3.5 shadow-2xl">
+      <div class="w-5 h-5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+      <span class="text-sm font-medium text-slate-100">Procesando malla 3D...</span>
+    </div>
+  </div>
+
+  <!-- Notificación flotante (reemplaza alert() para errores o avisos) -->
+  <div
+    id="toast-container"
+    role="status"
+    aria-live="polite"
+    class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3"
+  >
+    <div
+      id="toast-box"
+      class="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-slate-700 text-slate-100 text-xs sm:text-sm font-medium shadow-2xl backdrop-blur-md"
+    >
+      <span id="toast-icon" class="shrink-0"></span>
+      <span id="toast-message">Mensaje</span>
+    </div>
+  </div>
+
+  <!-- Lógica principal de Three.js y visor STL -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    // =========================================================================
+    // 1. REFERENCIAS AL DOM Y ESTADO DE LA APLICACIÓN
+    // =========================================================================
+    const canvas = document.getElementById('stl-canvas');
+    const fileInput = document.getElementById('file-input');
+    const btnOpenFile = document.getElementById('btn-open-file');
+    const btnLoadDemo = document.getElementById('btn-load-demo');
+    const btnResetCamera = document.getElementById('btn-reset-camera');
+    const btnToggleControls = document.getElementById('btn-toggle-controls');
+    const controlsBody = document.getElementById('controls-body');
+    const iconChevron = document.getElementById('icon-chevron');
+
+    const colorInput = document.getElementById('material-color');
+    const colorHexLabel = document.getElementById('color-hex-label');
+    const colorPresets = document.querySelectorAll('.color-preset');
+    const chkWireframe = document.getElementById('chk-wireframe');
+    const chkAutoRotate = document.getElementById('chk-autorotate');
+    const chkGrid = document.getElementById('chk-grid');
+
+    const modelBadge = document.getElementById('model-badge');
+    const infoFilename = document.getElementById('info-filename');
+    const infoDimX = document.getElementById('info-dim-x');
+    const infoDimY = document.getElementById('info-dim-y');
+    const infoDimZ = document.getElementById('info-dim-z');
+    const infoDimSummary = document.getElementById('info-dim-summary');
+    const infoTriangles = document.getElementById('info-triangles');
+
+    const dropOverlay = document.getElementById('drop-overlay');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const toastContainer = document.getElementById('toast-container');
+    const toastBox = document.getElementById('toast-box');
+    const toastIcon = document.getElementById('toast-icon');
+    const toastMessage = document.getElementById('toast-message');
+
+    // Estado interno del visor
+    let currentMesh = null;
+    let gridGroup = null;
+    let homeCameraPos = new THREE.Vector3(60, 45, 65);
+    let homeCameraTarget = new THREE.Vector3(0, 12, 0);
+    let cameraTransition = null;
+    let toastTimeout = null;
+
+    // =========================================================================
+    // 2. INICIALIZACIÓN DE ESCENA, CÁMARA, RENDERIZADOR Y CONTROLES
+    // =========================================================================
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x090e1a);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      2000
+    );
+    camera.position.copy(homeCameraPos);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+
+    // Controles orbitales suaves
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.screenSpacePanning = true;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 2.0;
+
+    // Si el usuario manipula manualmente la cámara, cancelar cualquier animación de reinicio
+    controls.addEventListener('start', () => {
+      cameraTransition = null;
+    });
+
+    // =========================================================================
+    // 3. ILUMINACIÓN DE ESTUDIO DE TRES PUNTOS (Ambiental + 3 Direccionales)
+    // =========================================================================
+    // Luz ambiental base para evitar zonas completamente negras en cavidades
+    const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.42);
+    scene.add(ambientLight);
+
+    // 1) Luz principal (Key Light): cálida/neutra intensa desde arriba-derecha-frente
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.85);
+    keyLight.position.set(1.2, 1.8, 1.3);
+    scene.add(keyLight);
+
+    // 2) Luz de relleno (Fill Light): tono frío suave desde izquierda-frente para revelar chaflanes
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.95);
+    fillLight.position.set(-1.5, 0.8, 1.0);
+    scene.add(fillLight);
+
+    // 3) Luz de contra / borde (Rim Light): trasera superior para perfilar aristas y silueta
+    const rimLight = new THREE.DirectionalLight(0xe0f2fe, 1.25);
+    rimLight.position.set(0.2, 1.5, -1.6);
+    scene.add(rimLight);
+
+    // =========================================================================
+    // 4. MATERIAL CAD ESTÁNDAR Y CARGADOR STL
+    // =========================================================================
+    const modelMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#38bdf8'),
+      roughness: 0.36,
+      metalness: 0.16,
+      wireframe: false,
+      side: THREE.DoubleSide, // Asegura visibilidad incluso si el STL tiene normales invertidas
+      flatShading: false,
+    });
+
+    const stlLoader = new STLLoader();
+
+    // =========================================================================
+    // 5. UTILIDADES DE INTERFAZ (Notificaciones Toast y Formateo)
+    // =========================================================================
+    function showToast(message, type = 'info') {
+      clearTimeout(toastTimeout);
+
+      const styles = {
+        success: {
+          border: 'border-emerald-500/50',
+          icon: `<svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>`,
+        },
+        error: {
+          border: 'border-rose-500/60',
+          icon: `<svg class="w-4 h-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+        },
+        info: {
+          border: 'border-sky-500/50',
+          icon: `<svg class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+        },
+      };
+
+      const currentStyle = styles[type] || styles.info;
+      toastBox.className = `flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-900/95 border ${currentStyle.border} text-slate-100 text-xs sm:text-sm font-medium shadow-2xl backdrop-blur-md`;
+      toastIcon.innerHTML = currentStyle.icon;
+      toastMessage.textContent = message;
+
+      toastContainer.classList.remove('opacity-0', '-translate-y-3');
+      toastContainer.classList.add('opacity-100', 'translate-y-0');
+
+      toastTimeout = setTimeout(() => {
+        toastContainer.classList.remove('opacity-100', 'translate-y-0');
+        toastContainer.classList.add('opacity-0', '-translate-y-3');
+      }, 3600);
+    }
+
+    // Formatea dimensiones adaptándose automáticamente a escalas en metros o milímetros
+    function formatDimension(value, maxDim) {
+      if (maxDim < 0.1) return value.toFixed(4);
+      if (maxDim < 1) return value.toFixed(3);
+      return value.toFixed(2);
+    }
+
+    // =========================================================================
+    // 6. CONSTRUCCIÓN DINÁMICA DE LA CUADRÍCULA BASE Y EJES DE REFERENCIA
+    // =========================================================================
+    function updateDynamicGrid(maxDim) {
+      // Liberar memoria de la cuadrícula anterior si existe
+      if (gridGroup) {
+        gridGroup.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+        scene.remove(gridGroup);
+      }
+
+      gridGroup = new THREE.Group();
+      gridGroup.visible = chkGrid.checked;
+
+      // Calcular un tamaño de cuadrícula limpio y proporcional a la pieza
+      const safeDim = Math.max(maxDim, 0.001);
+      const rawSize = safeDim * 2.6;
+      const magnitude = Math.pow(10, Math.floor(Math.log10(rawSize)));
+      const normalized = rawSize / magnitude;
+
+      let niceFactor = 10;
+      let divisions = 20;
+      if (normalized <= 1.2) {
+        niceFactor = 1;
+        divisions = 20;
+      } else if (normalized <= 2.2) {
+        niceFactor = 2;
+        divisions = 20;
+      } else if (normalized <= 3.0) {
+        niceFactor = 2.5;
+        divisions = 25;
+      } else if (normalized <= 6.0) {
+        niceFactor = 5;
+        divisions = 20;
+      }
+
+      const gridSize = niceFactor * magnitude;
+
+      // Cuadrícula principal estilo plataforma de impresión 3D / CAD
+      const gridHelper = new THREE.GridHelper(gridSize, divisions, 0x334155, 0x1e293b);
+      gridHelper.position.y = 0;
+      gridGroup.add(gridHelper);
+
+      // Líneas de ejes X (rojo) y Z (azul) sobre el origen para orientación espacial
+      const halfGrid = gridSize * 0.5;
+      const yOffset = safeDim * 0.0005;
+
+      const xAxisGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-halfGrid, yOffset, 0),
+        new THREE.Vector3(halfGrid, yOffset, 0),
+      ]);
+      const xAxisMat = new THREE.LineBasicMaterial({
+        color: 0xf43f5e,
+        transparent: true,
+        opacity: 0.45,
+      });
+      gridGroup.add(new THREE.Line(xAxisGeo, xAxisMat));
+
+      const zAxisGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, yOffset, -halfGrid),
+        new THREE.Vector3(0, yOffset, halfGrid),
+      ]);
+      const zAxisMat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.45,
+      });
+      gridGroup.add(new THREE.Line(zAxisGeo, zAxisMat));
+
+      scene.add(gridGroup);
+    }
+
+    // =========================================================================
+    // 7. CENTRADO DE PIEZA, ENCUADRE DE CÁMARA Y ACTUALIZACIÓN DE TELEMETRÍA
+    // =========================================================================
+    function applyGeometryToScene(geometry, fileName, isDemo = false) {
+      try {
+        // Calcular normales de vértices para una iluminación nítida de caras y curvas
+        geometry.computeVertexNormals();
+
+        // Calcular caja envolvente (Bounding Box) inicial
+        geometry.computeBoundingBox();
+        const box = geometry.boundingBox;
+        if (!box) {
+          throw new Error('No se pudieron calcular los límites de la geometría.');
+        }
+
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+
+        // Centrar en X y Z, y apoyar la base exactamente sobre Y = 0
+        geometry.translate(-center.x, -box.min.y, -center.z);
+        geometry.computeBoundingBox();
+
+        // Eliminar malla anterior y liberar recursos GPU
+        if (currentMesh) {
+          scene.remove(currentMesh);
+          if (currentMesh.geometry) currentMesh.geometry.dispose();
+        }
+
+        currentMesh = new THREE.Mesh(geometry, modelMaterial);
+        scene.add(currentMesh);
+
+        // Calcular dimensión máxima para ajustar dinámicamente cámara, planos near/far y cuadrícula
+        const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+
+        // Actualizar cuadrícula base proporcional
+        updateDynamicGrid(maxDim);
+
+        // Ajustar planos de recorte near y far dinámicamente (soporta mm, cm o metros)
+        camera.near = Math.max(maxDim * 0.001, 0.00005);
+        camera.far = Math.max(maxDim * 120, 100);
+        camera.updateProjectionMatrix();
+
+        // Configurar límites de zoom de OrbitControls acordes a la escala del modelo
+        controls.minDistance = maxDim * 0.08;
+        controls.maxDistance = maxDim * 18;
+
+        // Calcular posición óptima de la cámara en perspectiva isométrica CAD
+        const fovRad = THREE.MathUtils.degToRad(camera.fov);
+        const fitDistance = (maxDim / (2 * Math.tan(fovRad / 2))) * 1.65;
+
+        homeCameraTarget.set(0, size.y * 0.45, 0);
+        homeCameraPos.set(
+          fitDistance * 0.85,
+          size.y * 0.45 + fitDistance * 0.62,
+          fitDistance * 0.92
+        );
+
+        // Posicionar cámara inmediatamente al cargar nuevo modelo
+        cameraTransition = null;
+        camera.position.copy(homeCameraPos);
+        controls.target.copy(homeCameraTarget);
+        controls.update();
+
+        // Actualizar panel de información del modelo
+        const posAttr = geometry.attributes.position;
+        const triangleCount = posAttr ? Math.round(posAttr.count / 3) : 0;
+
+        const dimXStr = formatDimension(size.x, maxDim);
+        const dimYStr = formatDimension(size.y, maxDim);
+        const dimZStr = formatDimension(size.z, maxDim);
+
+        infoFilename.textContent = fileName;
+        infoFilename.title = fileName;
+        infoDimX.textContent = dimXStr;
+        infoDimY.textContent = dimYStr;
+        infoDimZ.textContent = dimZStr;
+        infoDimSummary.textContent = `${dimXStr} × ${dimYStr} × ${dimZStr}`;
+        infoTriangles.textContent = triangleCount.toLocaleString('es-ES');
+
+        // Actualizar etiqueta de estado (Demostración vs Archivo STL cargado)
+        if (isDemo) {
+          modelBadge.textContent = 'Demostración';
+          modelBadge.className =
+            'text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-400/30 shrink-0';
+        } else {
+          modelBadge.textContent = 'STL Cargado';
+          modelBadge.className =
+            'text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 shrink-0';
+        }
+      } catch (err) {
+        console.error('Error al aplicar la geometría a la escena:', err);
+        showToast('Error al renderizar la geometría 3D.', 'error');
+      }
+    }
+
+    // =========================================================================
+    // 8. GEOMETRÍA CAD DE DEMOSTRACIÓN INICIAL (Pieza mecánica de calibración)
+    // =========================================================================
+    function createDemoCADGeometry() {
+      try {
+        const parts = [];
+
+        // Helper para preparar primitivas sin índice y con atributos uniformes
+        const prepPart = (geo) => {
+          const nonIndexed = geo.index ? geo.toNonIndexed() : geo;
+          if (nonIndexed.attributes.uv) nonIndexed.deleteAttribute('uv');
+          nonIndexed.computeVertexNormals();
+          return nonIndexed;
+        };
+
+        // 1. Placa base octogonal / biselada
+        const basePlate = new THREE.CylinderGeometry(20, 21.5, 4, 8);
+        basePlate.rotateY(Math.PI / 8);
+        basePlate.translate(0, 2, 0);
+        parts.push(prepPart(basePlate));
+
+        // 2. Cuello cilíndrico escalonado
+        const lowerCollar = new THREE.CylinderGeometry(13.5, 15, 5, 48);
+        lowerCollar.translate(0, 6.5, 0);
+        parts.push(prepPart(lowerCollar));
+
+        // 3. Cuerpo central prismático de tolerancia
+        const centerTower = new THREE.BoxGeometry(15, 11, 15);
+        centerTower.translate(0, 14.5, 0);
+        parts.push(prepPart(centerTower));
+
+        // 4. Anillo superior de calibración de curvas (Torus)
+        const topRing = new THREE.TorusGeometry(6.5, 2.1, 24, 48);
+        topRing.rotateX(Math.PI / 2);
+        topRing.translate(0, 21.5, 0);
+        parts.push(prepPart(topRing));
+
+        // 5. Cuatro nervios laterales de refuerzo CAD
+        for (let i = 0; i < 4; i++) {
+          const angle = (i * Math.PI) / 2;
+          const rib = new THREE.BoxGeometry(2.4, 8, 5.5);
+          rib.translate(0, 8, 9.5);
+          rib.rotateY(angle);
+          parts.push(prepPart(rib));
+        }
+
+        const merged = mergeGeometries(parts, false);
+        parts.forEach((p) => p.dispose());
+
+        if (!merged) {
+          throw new Error('Fallo al fusionar geometría de demostración.');
+        }
+        return merged;
+      } catch (e) {
+        // Fallback seguro en caso de error inesperado
+        const fallback = new THREE.TorusKnotGeometry(12, 3.8, 128, 24);
+        return fallback.index ? fallback.toNonIndexed() : fallback;
+      }
+    }
+
+    function loadDemoModel() {
+      const demoGeo = createDemoCADGeometry();
+      applyGeometryToScene(demoGeo, 'pieza_calibracion_demo.stl', true);
+    }
+
+    // =========================================================================
+    // 9. CARGA Y PROCESAMIENTO DE ARCHIVOS .STL
+    // =========================================================================
+    async function processSTLFile(file) {
+      if (!file) return;
+
+      // Validar extensión .stl
+      if (!file.name.toLowerCase().endsWith('.stl')) {
+        showToast('Formato no válido. Selecciona un archivo con extensión .stl', 'error');
+        return;
+      }
+
+      // Mostrar indicador de carga
+      loadingOverlay.classList.remove('hidden');
+      loadingOverlay.classList.add('flex');
+
+      // Pequeña pausa para permitir que el navegador pinte el spinner antes de parsear archivos grandes
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const geometry = stlLoader.parse(buffer);
+
+        if (
+          !geometry ||
+          !geometry.attributes ||
+          !geometry.attributes.position ||
+          geometry.attributes.position.count === 0
+        ) {
+          throw new Error('El archivo STL no contiene triángulos válidos.');
+        }
+
+        applyGeometryToScene(geometry, file.name, false);
+        showToast(`Modelo cargado: ${file.name}`, 'success');
+      } catch (error) {
+        console.error('Error al leer archivo STL:', error);
+        showToast(
+          'No se pudo leer el archivo .STL. Verifica que no esté dañado.',
+          'error'
+        );
+      } finally {
+        loadingOverlay.classList.add('hidden');
+        loadingOverlay.classList.remove('flex');
+      }
+    }
+
+    // =========================================================================
+    // 10. EVENTOS DE INTERFAZ Y DRAG & DROP EN TODA LA VENTANA
+    // =========================================================================
+    // Botón abrir selector de archivo
+    btnOpenFile.addEventListener('click', () => {
+      fileInput.value = ''; // Permite volver a cargar el mismo archivo si se desea
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) processSTLFile(file);
+    });
+
+    // Botón recargar demo
+    btnLoadDemo.addEventListener('click', () => {
+      loadDemoModel();
+      showToast('Pieza de demostración restaurada', 'info');
+    });
+
+    // Arrastrar y soltar (Drag & Drop) sobre cualquier parte de la ventana
+    let dragCounter = 0;
+
+    window.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter++;
+      if (dragCounter === 1) {
+        dropOverlay.classList.remove('hidden');
+        dropOverlay.classList.add('flex');
+      }
+    });
+
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = Math.max(0, dragCounter - 1);
+      if (dragCounter === 0) {
+        dropOverlay.classList.add('hidden');
+        dropOverlay.classList.remove('flex');
+      }
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = 0;
+      dropOverlay.classList.add('hidden');
+      dropOverlay.classList.remove('flex');
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        processSTLFile(files[0]);
+      }
+    });
+
+    // Selector de color del material
+    function updateMaterialColor(hexValue) {
+      modelMaterial.color.set(hexValue);
+      colorInput.value = hexValue;
+      colorHexLabel.textContent = hexValue.toUpperCase();
+
+      // Resaltar muestra activa
+      colorPresets.forEach((btn) => {
+        const isMatch = btn.dataset.color?.toLowerCase() === hexValue.toLowerCase();
+        btn.classList.toggle('border-2', isMatch);
+        btn.classList.toggle('border-white', isMatch);
+        btn.classList.toggle('ring-1', isMatch);
+        btn.classList.toggle('ring-slate-600', isMatch);
+        btn.classList.toggle('border-slate-700', !isMatch);
+      });
+    }
+
+    colorInput.addEventListener('input', (e) => {
+      updateMaterialColor(e.target.value);
+    });
+
+    colorPresets.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.color) {
+          updateMaterialColor(btn.dataset.color);
+        }
+      });
+    });
+
+    // Modo alámbrico (Wireframe)
+    chkWireframe.addEventListener('change', (e) => {
+      modelMaterial.wireframe = e.target.checked;
+    });
+
+    // Rotación automática
+    chkAutoRotate.addEventListener('change', (e) => {
+      controls.autoRotate = e.target.checked;
+    });
+
+    // Mostrar/Ocultar cuadrícula base
+    chkGrid.addEventListener('change', (e) => {
+      if (gridGroup) {
+        gridGroup.visible = e.target.checked;
+      }
+    });
+
+    // Centrar / Restablecer vista de la cámara con transición suave
+    btnResetCamera.addEventListener('click', () => {
+      cameraTransition = {
+        startTime: performance.now(),
+        duration: 420,
+        startPos: camera.position.clone(),
+        endPos: homeCameraPos.clone(),
+        startTarget: controls.target.clone(),
+        endTarget: homeCameraTarget.clone(),
+      };
+    });
+
+    // Plegar / desplegar panel de controles (útil en móviles)
+    let controlsExpanded = true;
+    btnToggleControls.addEventListener('click', () => {
+      controlsExpanded = !controlsExpanded;
+      controlsBody.classList.toggle('hidden', !controlsExpanded);
+      iconChevron.classList.toggle('rotate-180', !controlsExpanded);
+    });
+
+    // Adaptación fluida al redimensionar la ventana
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // =========================================================================
+    // 11. BUCLE DE RENDERIZADO Y ARRANQUE AL CARGAR LA VENTANA
+    // =========================================================================
+    function animate(now = performance.now()) {
+      requestAnimationFrame(animate);
+
+      // Interpolación suave de reinicio de cámara
+      if (cameraTransition) {
+        const elapsed = now - cameraTransition.startTime;
+        const progress = Math.min(elapsed / cameraTransition.duration, 1);
+        // Curva easeOutCubic
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        camera.position.lerpVectors(
+          cameraTransition.startPos,
+          cameraTransition.endPos,
+          ease
+        );
+        controls.target.lerpVectors(
+          cameraTransition.startTarget,
+          cameraTransition.endTarget,
+          ease
+        );
+
+        if (progress >= 1) {
+          cameraTransition = null;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('load', () => {
+      // Cargar modelo de calibración CAD inicial y arrancar bucle 3D
+      loadDemoModel();
+      animate();
+    });
+  </script>
+</body>
+</html>
